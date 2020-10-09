@@ -4,7 +4,7 @@ import org.apache.spark.sql.Column
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{col, lit, sum}
 
-case class Rule(fieldName : String, constraints : Seq[Constraint] = Seq.empty, whereConstraint : Option[]) {
+case class Rule(fieldName : String, constraints : Seq[Constraint] = Seq.empty, whereConstraint : Option[WhereConstraint] = None) {
 
   val name = fieldName+"_is_valid"
   val field = col(fieldName)
