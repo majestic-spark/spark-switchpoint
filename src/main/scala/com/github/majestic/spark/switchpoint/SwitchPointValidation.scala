@@ -1,7 +1,9 @@
 package com.github.majestic.spark.switchpoint
 
+import com.github.majestic.spark.switchpoint.SwitchPointValidation.applyRule
+import com.github.majestic.spark.switchpoint.constraints.WhereConstraint
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{Column, DataFrame}
-import org.apache.spark.sql.functions.col
 
 
 case class SwitchPointValidation(rules : Seq[Rule] = Seq.empty) {
@@ -15,12 +17,9 @@ case class SwitchPointValidation(rules : Seq[Rule] = Seq.empty) {
   }
 
   def runOn(dataFrame: DataFrame) : ValidationResult = {
-      val dataframeWithAppliedRules = rules.foldLeft[DataFrame](dataFrame){
-        case (df,rule) => {
-          val compiledConstraints = Rule.compileConstraints(rule)
-          df.withColumn(rule.getName,compiledConstraints)
-        }
-      }.withColumn(topRuleName, SwitchPointValidation.compileRules(rules))
+      val dataframeWithAppliedRules = rules
+        .foldLeft[DataFrame](dataFrame)(applyRule)
+        .withColumn(topRuleName, SwitchPointValidation.compileRules(rules))
 
     dataframeWithAppliedRules.cache()
 
@@ -41,8 +40,20 @@ object SwitchPointValidation {
 
   def compileRules(rules : Seq[Rule]) : Column = {
     rules
-      .map(rule => col(rule.name))
+      .map(rule => col(rule.ruleName))
       .reduce(_ and _)
+  }
+
+  def applyRule(df : DataFrame, rule : Rule) : DataFrame = {
+    val compiledConstraints = Rule.compileConstraints(rule)
+
+    rule.whereConstraint match {
+      case None => df.withColumn(rule.ruleName,compiledConstraints)
+      case Some(WhereConstraint(condition)) => {
+        df.withColumn(rule.ruleName, when(condition,compiledConstraints).otherwise(lit(true)))
+      }
+    }
+
   }
 
 }
