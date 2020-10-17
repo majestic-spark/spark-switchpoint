@@ -1,51 +1,48 @@
 package com.github.majestic.spark.switchpoint
 
+import com.github.majestic.spark.switchpoint.constraints.{Constraint, WhereConstraint}
 import org.apache.spark.sql.Column
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{col, lit, sum}
 
-case class Rule(fieldName : String, constraints : Seq[Constraint] = Seq.empty, whereConstraint : Option[WhereConstraint] = None) {
+case class Rule(ruleName : String, constraints : Seq[Constraint] = Seq.empty, whereConstraint : Option[WhereConstraint] = None) {
 
-  val name = fieldName+"_is_valid"
-  val field = col(fieldName)
-
-
-  def matchesPattern(pattern : String) : Rule = {
+  def matchesPattern(fieldName : String, pattern : String) : Rule = {
     this.addConstraint(
-        field.rlike(pattern)
+        col(fieldName).rlike(pattern)
     )
   }
 
-  def isIn(lowerBound : Any, upperdBound : Any) : Rule = {
+  def isIn(fieldName : String, lowerBound : Any, upperdBound : Any) : Rule = {
     this.addConstraint(
-        field.between(lowerBound,upperdBound)
+        col(fieldName).between(lowerBound,upperdBound)
     )
   }
 
-  def isIn(sequence : Seq[Any]) : Rule = {
+  def isIn(fieldName : String, sequence : Seq[Any]) : Rule = {
     this.addConstraint(
-        field.isInCollection(sequence)
+        col(fieldName).isInCollection(sequence)
     )
   }
 
-  def isDefined : Rule = {
+  def isDefined(fieldName : String) : Rule = {
     this.addConstraint(
-      field
+      col(fieldName)
         .isNotNull
     )
   }
 
-  def isNotEmpty : Rule = {
+  def isNotEmpty(fieldName : String) : Rule = {
     this.addConstraint(
-      field
+      col(fieldName)
         .notEqual(lit(""))
     )
   }
 
-  def isUnique : Rule = {
+  def isUnique(fieldName : String) : Rule = {
     val one = lit(1)
     val window = Window
-      .partitionBy(field)
+      .partitionBy(col(fieldName))
 
     this.addConstraint(
         sum(one)
@@ -56,20 +53,19 @@ case class Rule(fieldName : String, constraints : Seq[Constraint] = Seq.empty, w
 
   def addConstraint(constraintColumn : Column): Rule = {
     val constraint = Constraint(constraintColumn)
-    Rule(fieldName,
+    Rule(ruleName,
       constraints :+ constraint,
       whereConstraint
     )
   }
 
-  def getName : String = {
-    fieldName+"_is_valid"
+  def where(condition : Column) : Rule = {
+    Rule(ruleName,constraints,Some(WhereConstraint(condition)))
   }
 
 }
 
 object Rule {
-
 
   def compileConstraints(rule : Rule) : Column = {
     rule
@@ -77,5 +73,6 @@ object Rule {
       .map(_.constraintStatement)
       .reduce(_ and _ )
   }
+
 
 }
